@@ -37,7 +37,7 @@ func TestRun(t *testing.T) {
 	// important
 	// we pass the bytes.Buffer as a refference because
 	// the bytes.Buffer implements the io.Write interface using a pointer receiver
-	if err := run(inputFile, &tempOutFile); err != nil {
+	if err := run(inputFile, &tempOutFile, true); err != nil {
 		t.Fatal(err)
 	}
 	resultFile := strings.TrimSpace(tempOutFile.String())

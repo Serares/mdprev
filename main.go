@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"runtime"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
@@ -28,13 +30,14 @@ const (
 
 func main() {
 	filename := flag.String("file", "", "Name of the markdown file to preview")
+	skipPreview := flag.Bool("s", false, "Skip the preview of the html file")
 	flag.Parse()
 
 	if *filename == "" {
 		flag.Usage()
 		os.Exit(1)
 	}
-	if err := run(*filename, os.Stdout); err != nil {
+	if err := run(*filename, os.Stdout, *skipPreview); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -46,7 +49,7 @@ func main() {
 // we have to capture it's name from the output of the function
 // is the case of the programm the writer will be the STDOUT of the terminal so that the user can see the name of the outfile
 // but in case of tests the outfile will be captured by a buffer slice see line 37 main_test.go
-func run(filename string, out io.Writer) error {
+func run(filename string, out io.Writer, skipPreview bool) error {
 	// Read all the data from the input file and check for errors
 	input, err := os.ReadFile(filename)
 	if err != nil {
@@ -61,9 +64,17 @@ func run(filename string, out io.Writer) error {
 	if err := tempFile.Close(); err != nil {
 		return err
 	}
+	outFileName := tempFile.Name()
+	fmt.Fprint(out, outFileName)
+	if err := saveHTML(outFileName, htmlData); err != nil {
+		return err
+	}
 
-	fmt.Fprint(out, tempFile.Name())
-	return saveHTML(tempFile.Name(), htmlData)
+	if skipPreview {
+		return nil
+	}
+
+	return preview(outFileName)
 }
 
 func parseContent(input []byte) []byte {
@@ -83,4 +94,31 @@ func parseContent(input []byte) []byte {
 
 func saveHTML(outFName string, data []byte) error {
 	return os.WriteFile(outFName, data, 0644)
+}
+
+func preview(fname string) error {
+	cName := ""
+	cParams := []string{}
+	// Define executable based on OS
+	switch runtime.GOOS {
+	case "linux":
+		cName = "xdg-open"
+	case "windows":
+		cName = "cmd.exe"
+		cParams = []string{"/C", "start"}
+	case "darwin":
+		cName = "open"
+	default:
+		return fmt.Errorf("OS not supported")
+	}
+	// Append filename to parameters slice
+	cParams = append(cParams, fname)
+	// Locate executable in PATH
+	cPath, err := exec.LookPath(cName)
+
+	if err != nil {
+		return err
+	}
+	// Open the file using default program
+	return exec.Command(cPath, cParams...).Run()
 }
