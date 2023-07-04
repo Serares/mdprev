@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -14,14 +13,14 @@ const (
 )
 
 func TestParseContent(t *testing.T) {
-	input, err := ioutil.ReadFile(inputFile)
+	input, err := os.ReadFile(inputFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	result := parseContent(input)
 
-	expect, err := ioutil.ReadFile(goldenFile)
+	expect, err := os.ReadFile(goldenFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,11 +37,11 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := ioutil.ReadFile(resultFile)
+	result, err := os.ReadFile(resultFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expect, err := ioutil.ReadFile(goldenFile)
+	expect, err := os.ReadFile(goldenFile)
 	if err != nil {
 		t.Fatal(err)
 	}

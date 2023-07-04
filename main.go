@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -43,7 +42,7 @@ func main() {
 
 func run(filename string) error {
 	// Read all the data from the input file and check for errors
-	input, err := ioutil.ReadFile(filename)
+	input, err := os.ReadFile(filename)
 	if err != nil {
 		return err
 	}
@@ -69,5 +68,5 @@ func parseContent(input []byte) []byte {
 }
 
 func saveHTML(outFName string, data []byte) error {
-	return ioutil.WriteFile(outFName, data, 0644)
+	return os.WriteFile(outFName, data, 0644)
 }
