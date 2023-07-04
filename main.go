@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"time"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
@@ -73,7 +74,11 @@ func run(filename string, out io.Writer, skipPreview bool) error {
 	if skipPreview {
 		return nil
 	}
-
+	// this is going to introduce a race condition
+	// where the browser might not get the chance to open the file
+	// before the preview returns
+	// so we will add a delay in the preview function to give the browser time to open the file
+	defer os.Remove(outFileName)
 	return preview(outFileName)
 }
 
@@ -120,5 +125,10 @@ func preview(fname string) error {
 		return err
 	}
 	// Open the file using default program
-	return exec.Command(cPath, cParams...).Run()
+	err = exec.Command(cPath, cParams...).Run()
+	// TODO this is not the recommended solution
+	// use signals to cleanup files
+	time.Sleep(2 * time.Second)
+
+	return err
 }
