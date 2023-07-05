@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"os"
 	"os/exec"
@@ -15,31 +17,36 @@ import (
 )
 
 const (
-	header = `<!DOCTYPE html>
+	defaultTemplate = `<!DOCTYPE html>
 	<html>
 	<head>
 	<meta http-equiv="content-type" content="text/html; charset=utf-8">
-	<title>Markdown Preview Tool</title>
+	<title>{{ .Title }}</title>
 	</head>
 	<body>
-	`
-	footer = `
+			<h1>Preview of File: {{ .FileName }}</hi>
+			<h3>Bellow is the content of the md file</h3>
+			</br>
+			{{ .Body }}
 	</body>
 	</html>
 	`
 )
 
+type content struct {
+	Title    string
+	Body     template.HTML
+	FileName string
+}
+
 func main() {
 	filename := flag.String("file", "", "Name of the markdown file to preview")
 	skipPreview := flag.Bool("s", false, "Skip the preview of the html file")
+	tFname := flag.String("t", "", "Alternate template filename")
 	flag.Parse()
-
-	if *filename == "" {
-		flag.Usage()
-		os.Exit(1)
-	}
-	if err := run(*filename, os.Stdout, *skipPreview); err != nil {
+	if err := run(*filename, os.Stdout, os.Stdin, *skipPreview, *tFname); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		flag.Usage()
 		os.Exit(1)
 	}
 }
@@ -50,15 +57,22 @@ func main() {
 // we have to capture it's name from the output of the function
 // is the case of the programm the writer will be the STDOUT of the terminal so that the user can see the name of the outfile
 // but in case of tests the outfile will be captured by a buffer slice see line 37 main_test.go
-func run(filename string, out io.Writer, skipPreview bool) error {
-	// Read all the data from the input file and check for errors
-	input, err := os.ReadFile(filename)
+func run(filename string, out io.Writer, r io.Reader, skipPreview bool, templateFname string) error {
+	input, err := getInput(filename, r)
 	if err != nil {
+		fmt.Printf("error extracting the input %v", err)
 		return err
 	}
-	htmlData := parseContent(input)
+
+	htmlData, err := parseContent(input, templateFname, filename)
+	if err != nil {
+		fmt.Printf("error parsing the content %v", err)
+		return err
+	}
+
 	tempFile, err := os.CreateTemp("", "mdprev.*.html")
 	if err != nil {
+		fmt.Printf("error creating temp file %v", err)
 		return err
 	}
 
@@ -82,19 +96,60 @@ func run(filename string, out io.Writer, skipPreview bool) error {
 	return preview(outFileName)
 }
 
-func parseContent(input []byte) []byte {
+func getInput(filename string, r io.Reader) ([]byte, error) {
+	var input []byte
+	if filename == "" {
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				fmt.Printf("Got an error scanning the stdin %v\n", scanner.Err().Error())
+			}
+			input = append(input, scanner.Bytes()...)
+		}
+	}
+	if filename != "" {
+		// Read all the data from the input file and check for errors
+		extractedBytes, err := os.ReadFile(filename)
+		if err != nil {
+			return nil, err
+		}
+		input = extractedBytes
+	}
+
+	return input, nil
+}
+
+func parseContent(input []byte, templateFname string, fileName string) ([]byte, error) {
 	// Parse the markdown file through blackfriday and bluemonday
 	// to generate a valid and safe HTML
 	output := blackfriday.Run(input)
 	body := bluemonday.UGCPolicy().SanitizeBytes(output)
 
-	var combinedHtmlBytes bytes.Buffer
+	t, err := template.New("mdp").Parse(defaultTemplate)
+	if err != nil {
+		return nil, err
+	}
 
-	combinedHtmlBytes.WriteString(header)
-	combinedHtmlBytes.Write(body)
-	combinedHtmlBytes.WriteString(footer)
+	if templateFname != "" {
+		t, err = template.ParseFiles(templateFname)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	return combinedHtmlBytes.Bytes()
+	if fileName == "" {
+		fileName = "MD provided from the STDIN"
+	}
+	c := content{
+		Title:    "Preview for the md file",
+		Body:     template.HTML(body),
+		FileName: fileName,
+	}
+	var buffContent bytes.Buffer
+	if err := t.Execute(&buffContent, c); err != nil {
+		return nil, err
+	}
+	return buffContent.Bytes(), nil
 }
 
 func saveHTML(outFName string, data []byte) error {

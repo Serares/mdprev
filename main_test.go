@@ -18,7 +18,10 @@ func TestParseContent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := parseContent(input)
+	result, err := parseContent(input, "", inputFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	expect, err := os.ReadFile(goldenFile)
 	if err != nil {
@@ -37,7 +40,7 @@ func TestRun(t *testing.T) {
 	// important
 	// we pass the bytes.Buffer as a refference because
 	// the bytes.Buffer implements the io.Write interface using a pointer receiver
-	if err := run(inputFile, &tempOutFile, true); err != nil {
+	if err := run(inputFile, &tempOutFile, nil, true, ""); err != nil {
 		t.Fatal(err)
 	}
 	resultFile := strings.TrimSpace(tempOutFile.String())
